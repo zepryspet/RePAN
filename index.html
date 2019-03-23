@@ -1,0 +1,256 @@
+<html>
+<head>
+  <style>
+    pre, code {
+    font-family: monospace, monospace;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    }
+    pre {
+      overflow: auto;
+    }
+    pre > code {
+      display: block;
+      padding: 1rem;
+      word-wrap: normal;
+    }
+    input[type=text], input[type=password] {
+    width: 100%;
+    padding: 12px 20px;
+    margin: 8px 0;
+    display: inline-block;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      background-color: #4CAF50;
+      color: white;
+      padding: 14px 20px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    div {
+      border-radius: 5px;
+      background-color: #f2f2f2;
+      padding: 20px;
+    }
+    form{
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    p{
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: white;
+    }
+    .hide {
+    display: none;
+    }
+  </style>
+</head>
+<body>
+<form>
+  <p>Firewall IP or FQDN: </p>
+    <div>
+      <input type="text" id="firewall" name="Firewall" value="172.16.1.200">
+    </div>
+  <p>Select an authentication method: </p>
+    <div>
+      <input type="radio" id="auth_user"
+       name="auth" value="user" checked onclick="HideAuth()">
+      <label for="auth_user">Username/Password</label>
+      <input type="radio" id="auth_api"
+       name="auth" value="api" onclick="HideAuth()">
+      <label for="auth_api">API</label>
+    </div>
+  <div id="form_user">
+  User: <input type="text" id="user" name="user" value="glastra">
+  Password: <input id="password" type="password" name="Password">
+  </div>
+  <div id="form_api" class="hide">
+    API: <input type="text" id="myapi" name="myapi">
+  </div>
+  </div>
+  <p >Select what section you want to view/modify with the API</p>
+  <div>
+    <input type="radio" id="action_api"
+     name="section" value="api" onclick="HideSection()">
+    <label for="action_api">Generate API</label>
+
+    <input type="radio" id="policies"
+     name="section" value="policies" checked onclick="HideSection()">
+    <label for="policies">Policies</label>
+
+    <input type="radio" id="objects"
+     name="section" value="objects" onclick="HideSection()">
+    <label for="objects">Objects</label>
+  </div>
+  <div id="section_policies">
+    <p >Select the type of policy</p>
+    <div>
+      <input type="radio" id="secpol"
+       name="poltype" value="security" checked>
+      <label for="secpol">Security rules</label>
+      <input type="radio" id="natpol"
+       name="poltype" value="nat">
+      <label for="natpol">NAT rules</label>
+    </div>
+    <p >Select the action you want to perform</p>
+    <div>
+      <select>
+        <option value="display">display</option>
+      </select>
+    </div>
+  </div>
+  <button onclick="myFunction()" type="button">Submit</button>
+</form>
+<p >Result:</p>
+<pre>
+  <code id="result" contenteditable spellcheck="false" >
+    <!-- your code here -->
+  </code>
+</pre>
+
+<script>
+function myFunction() {
+  var username = document.getElementById("user").value;
+  var pass = document.getElementById("password").value;
+  var firewall = document.getElementById("firewall").value;
+  var api = document.getElementById("myapi").value;
+  var section = document.querySelector('input[name="section"]:checked').value
+  switch(section){
+    case "policies":
+    var filter = "";
+    var action = "display";
+    //Calling policy edit if an api is provided otherwise generate api first
+      if (api != ""){
+          PolEdit(api, firewall, action, filter);
+      }else{
+        ApiGen(username, pass, firewall).then(function(response){
+          var Api_ret = response;
+          //Verifying that api response is good
+          if (Api_ret == ""){
+            document.getElementById("result").innerHTML = "There was a problem with your request please verify your data";
+          }else{
+            //Calling
+            PolEdit(Api_ret, firewall, action, filter).then(function(response){
+              document.getElementById("result").innerHTML = response;
+            });
+          }
+        }).catch(error => console.error('Error:', error));
+      }
+    break;
+    case "objects":
+      //text = "Banana is good!";
+    break;
+    //Generate API will be the default
+    default:
+      //let Api_ret;
+      ApiGen(username, pass, firewall).then(function(response){
+        var Api_ret = response;
+        //console.log(response);
+        //console.log("it worked?");
+        if (Api_ret == ""){
+          document.getElementById("result").innerHTML = "There was a problem with your request please verify your data";
+        }else{
+          document.getElementById("result").innerHTML = Api_ret;
+        }
+      }).catch(error => console.error('Error:', error));
+  }
+}
+
+async function ApiGen(username, pass, firewall){
+  var url = 'http://127.0.0.1:8000/getapi';
+  var data = {user: username , password: pass, firewall: firewall};
+  let r;
+  try{
+    let response = await fetch(url, {
+      method: 'POST', // or 'PUT'
+      body: JSON.stringify(data), // data can be `string` or {object}!
+      headers:{
+        'Content-Type': 'application/json'
+      },
+    })
+    if (response.status !== 200) {
+      console.log('Looks like there was a problem. Status Code: ' +
+        response.status);
+      r = "";
+    }else{
+      await response.text().then(function (text) {
+        r=text;
+      });
+
+    }
+  }catch(error) {
+        console.error(error);
+  }
+  return r;
+}
+
+async function PolEdit(api, firewall, action, filter) {
+  var url = 'http://127.0.0.1:8000/rules';
+  var data = {api: api , firewall: firewall, action: action, filter:filter};
+  let r;
+  try{
+    let response = await fetch(url, {
+      method: 'POST', // or 'PUT'
+      body: JSON.stringify(data), // data can be `string` or {object}!
+      headers:{
+        'Content-Type': 'application/json'
+      },
+    })
+    if (response.status !== 200) {
+      console.log('Looks like there was a problem. Status Code: ' +
+        response.status);
+      r = "";
+    }else{
+      await response.text().then(function (text) {
+        r=text;
+      });
+
+    }
+  }catch(error) {
+        console.error(error);
+  }
+  return r;
+}
+function HideAuth() {
+  var form_api = document.getElementById("form_api")
+  var form_user = document.getElementById("form_user")
+  var auth = document.querySelector('input[name=auth]:checked').value;
+  //console.log(auth);
+  if (auth=="api"){
+    form_api.classList.remove("hide");
+    form_user.classList.add("hide");
+  }
+  if (auth=="user"){
+    form_user.classList.remove("hide");
+    form_api.classList.add("hide");
+  }
+}
+
+function HideSection() {
+  var policies = document.getElementById("section_policies")
+  //var form_user = document.getElementById("form_user")
+  var section = document.querySelector('input[name=section]:checked').value;
+  //console.log(auth);
+  if (section=="api"){
+    policies.classList.add("hide");
+    //form_user.classList.add("hide");
+  }
+  if (section=="policies"){
+    policies.classList.remove("hide");
+  }
+  if (section=="objects"){
+    policies.classList.add("hide");
+  }
+}
+</script>
+
+</body>
+</html>
